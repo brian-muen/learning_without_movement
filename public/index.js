@@ -281,13 +281,209 @@ function getMedian(buffer) {
     }
 }
 
-// To be called after each valid movement trial:
-//   pushToBuffer(rt, rtBuffer);
-//   pushToBuffer(mt, mtBuffer);
-// getMedian(rtBuffer) for animation latency
-// getMedian(mtBuffer) for animation duration
-// ========================================================================
+// Initialize experiment with target file data
 function gameSetup(data) {
+    // Initialize experiment state
+    const experimentState = {
+        currentTriplet: 0,
+        currentTrial: 0,
+        rtBuffer: [],
+        mtBuffer: [],
+        trialHistory: [],
+        isPlanningMode: false,
+        trials: data.trials,
+        targetDistance: data.target_distance,
+        rotationConditions: data.rotation_conditions,
+        numTrials: data.numtrials
+    };
+
+    // Initialize trial index
+    let currentTrialIndex = 0;
+
+    // Function to get next trial data
+    function getNextTrialData() {
+        if (currentTrialIndex >= experimentState.numTrials) {
+            return null;
+        }
+        
+        const trialData = experimentState.trials[currentTrialIndex];
+        currentTrialIndex++;
+        return trialData;
+    }
+
+    // Function to get current trial data
+    function getCurrentTrialData() {
+        return experimentState.trials[currentTrialIndex - 1];
+    }
+
+    // Calculate running median
+    function getMedian(buffer) {
+        const sorted = [...buffer].sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    // Calculate STL
+    function calculateSTL(trialData) {
+        if (trialData.length < 3) return null;
+        const triplet = trialData.slice(-3);
+        return triplet[2].endpointAngle - triplet[0].endpointAngle;
+    }
+
+    // Calculate Remembered STL
+    function calculateRememberedSTL(trialData) {
+        if (trialData.length < 4) return null;
+        const currentTriplet = trialData.slice(-3);
+        const previousTriplet = trialData.slice(-6, -3);
+        return currentTriplet[0].endpointAngle - previousTriplet[0].endpointAngle;
+    }
+
+    // Handle planning-only condition
+    function handlePlanningCondition() {
+        experimentState.isPlanningMode = true;
+        const latency = getMedian(experimentState.rtBuffer) || 500;
+        const duration = getMedian(experimentState.mtBuffer) || 800;
+        
+        // Show target in magenta after latency
+        setTimeout(() => {
+            d3.select('#target').style('fill', 'magenta');
+            
+            // Start animation after latency
+            setTimeout(() => {
+                animateCursor();
+            }, latency);
+        }, 100); // 100ms delay after green
+    }
+
+    // Animate cursor for planning condition
+    function animateCursor() {
+        const targetAngle = experimentState.currentTrialData.targetAngle;
+        const rotation = experimentState.currentTrialData.rotation;
+        
+        // Calculate animation path
+        const path = d3.path();
+        path.moveTo(centerX, centerY);
+        const targetX = centerX + TARGET_RADIUS * Math.cos(degToRad(targetAngle + rotation));
+        const targetY = centerY + TARGET_RADIUS * Math.sin(degToRad(targetAngle + rotation));
+        path.lineTo(targetX, targetY);
+        
+        // Create animation
+        d3.select('#cursor')
+            .transition()
+            .duration(getMedian(experimentState.mtBuffer) || 800)
+            .attr('d', path.toString())
+            .on('end', () => {
+                // Show endpoint feedback
+                showFeedback(targetX, targetY);
+                experimentState.isPlanningMode = false;
+            });
+    }
+
+    // Show feedback
+    function showFeedback(x, y) {
+        const angle = calculateAngle(x, y);
+        const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+        
+        // Draw feedback circle
+        d3.select('#target')
+            .transition()
+            .duration(500)
+            .style('fill', 'red');
+        
+        // Save trial data
+        saveTrialData({
+            trialIndex: experimentState.currentTrial,
+            tripletIndex: experimentState.currentTrial % 3 + 1,
+            tripletId: experimentState.currentTriplet,
+            tripletType: experimentState.currentTrial % 3 === 1 ? 'no-movement' : 'movement',
+            targetAngle: experimentState.currentTrialData.targetAngle,
+            rotation: experimentState.currentTrialData.rotation,
+            feedbackShown: true,
+            reactionTime: Date.now() - experimentState.startTime,
+            movementDuration: Date.now() - experimentState.movementStart,
+            endpointAngle: angle,
+            timeoutReason: null
+        });
+    }
+
+    // Save trial data
+    function saveTrialData(trialData) {
+        experimentState.trialHistory.push(trialData);
+        experimentState.trialHistory = experimentState.trialHistory.slice(-5); // Keep last 5 trials
+        
+        // Calculate STL and Remembered STL
+        const stl = calculateSTL(experimentState.trialHistory);
+        const rememberedStl = calculateRememberedSTL(experimentState.trialHistory);
+        
+        // Update buffers
+        if (!experimentState.isPlanningMode) {
+            pushToBuffer(trialData.reactionTime, experimentState.rtBuffer);
+            pushToBuffer(trialData.movementDuration, experimentState.mtBuffer);
+        }
+    }
+
+    // Handle timeout
+    function handleTimeout(reason) {
+        d3.select('#target')
+            .transition()
+            .duration(500)
+            .style('fill', 'red');
+        
+        saveTrialData({
+            ...experimentState.currentTrialData,
+            timeoutReason: reason
+        });
+        
+        // Show timeout message
+        d3.select('#too_slow_message')
+            .style('display', 'block')
+            .text(reason);
+        
+        // Wait and restart trial
+        setTimeout(() => {
+            d3.select('#too_slow_message').style('display', 'none');
+            startNextTrial();
+        }, TIMEOUT_DURATION);
+    }
+
+    // Start next trial
+    function startNextTrial() {
+        const trialData = getNextTrialData();
+        if (!trialData) {
+            // No more trials - end the experiment
+            endGame();
+            return;
+        }
+
+        experimentState.currentTrialData = trialData;
+        
+        // Update triplet state
+        if (trialData.trial_position === 1) {
+            experimentState.currentTriplet++;
+        }
+        
+        // Reset trial state
+        experimentState.startTime = Date.now();
+        experimentState.movementStart = null;
+        experimentState.isPlanningMode = false;
+        
+        // Show target
+        showTarget(trialData.target_angle);
+        
+        // Handle planning condition
+        if (trialData.triplet_type === 'no-movement') {
+            handlePlanningCondition();
+        }
+    }
+
+    // Initialize experiment
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const TARGET_RADIUS = 250;
+    
+    // Start first trial
+    startNextTrial();
+}
     /*********************
      * Browser Settings  *
      *********************/

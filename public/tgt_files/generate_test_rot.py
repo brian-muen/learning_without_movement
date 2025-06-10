@@ -15,137 +15,90 @@ def generateTargetAngles(numTargets):
     
     return angleList
 
-def generateJSON(numTargets, movementCycle, cycleDistribution, rotationAngle, targetDistance, numDemoCycles, demoTargetAngle):
-    # Ensure non demo cycles add up
-    if (movementCycle != sum(cycleDistribution)):
-        raise Exception('Number of non demo cycles do not add up. Should have ' + str(movementCycle) + ' cycles, but has ' + str(sum(cycleDistribution)) + '.')
-    if (len(cycleDistribution) != 4):
-        raise Exception('Incorrect amount of entries in cycle distribution, should have 4 but has ' + str(len(cycleDistribution)) + '.')
-    jsonData = {}
-    targetAngles = generateTargetAngles(numTargets)
-    numTrials = numTargets * movementCycle # block size
-    numDemoTrials = numDemoCycles * numTargets
-    totalNumTrials = numTrials + numDemoTrials
-    jsonData["numtrials"] = totalNumTrials
-    trialNums = {}
-    aimingLandmarks = {}
-    onlineFB = {}
-    endpointFB = {}
-    rotation = {}
-    clampedFB = {}
-    tgtDistance = {}
-    angles = []
-    anglesDict = {}
-    betweenBlocks = {}
-    targetJump = {}
+def generateJSON(numTargets, numTrials, rotationConditions):
+    """
+    Generate target file with proper triplet structure and rotation conditions
     
-    # Breakpoints between phases
-    base_no_fb = cycleDistribution[0] * numTargets
-    base_fb = base_no_fb + (cycleDistribution[1] * numTargets)
-    demo = base_fb + numDemoTrials
-    rotate = demo + (cycleDistribution[2] * numTargets)
-    aftereffect_no_fb = rotate + (cycleDistribution[3] * numTargets)
-    if (totalNumTrials != aftereffect_no_fb):
-        raise Exception('Number of reaches do not add up. Should have ' + str(totalNumTrials) + ' targets, but only has ' + str(aftereffect_no_fb) + '.')
-
-    # Update the blocks whenever numTrials is changed.
-    # **TODO** Update values from 0 --> 1 to toggle effects
-    # For target jump, 1 ==> jump to target, any other integer != 0 or 1 ==> jump away from target to that degree
-    for i in range(totalNumTrials):
-        trialNums[i] = i + 1
-        aimingLandmarks[i] = 0
-        tgtDistance[i] = targetDistance
-        if i < base_no_fb :
-            onlineFB[i] = 0
-            endpointFB[i] = 0
-            rotation[i] = float(0)
-            clampedFB[i] = float(0)
-            targetJump[i] = float(0)
-        elif i < base_fb :
-            onlineFB[i] = 1
-            endpointFB[i] = 1
-            rotation[i] = float(0)
-            clampedFB[i] = float(0)
-            targetJump[i] = float(0)
-        elif i < demo:
-            onlineFB[i] = 1
-            endpointFB[i] = 1
-            rotation[i] = float(rotationAngle)
-            clampedFB[i] = float(1)
-            targetJump[i] = float(0)
-        elif i < rotate : 
-            onlineFB[i] = 1
-            endpointFB[i] = 1
-            rotation[i] = float(rotationAngle)
-            clampedFB[i] = float(1)
-            targetJump[i] = float(0)
-        else:
-            onlineFB[i] = 0
-            endpointFB[i] = 0
-            rotation[i] = float(0)
-            clampedFB[i] = float(0)
-            targetJump[i] = float(0)
-
-    # Shuffle the targets 
-    for i in range(totalNumTrials):
-        if i % numTargets == 0:
-            angles = targetAngles
-            random.shuffle(angles)
-        anglesDict[i] = float(angles[i % len(angles)])
-        betweenBlocks[str(i)] = 0.0
-
-    # Set up all demo targets
-    for i in range(base_fb, demo):
-        anglesDict[i] = float(demoTargetAngle)
-    for i in range(base_fb - 1, demo - 1):
-        betweenBlocks[str(i)] = 6
+    Args:
+        numTargets: Number of target positions (should be 4)
+        numTrials: Total number of trials
+        rotationConditions: List of rotation conditions [0, 15, -15]
+    """
+    if numTargets != 4:
+        raise ValueError(f"Expected 4 target positions, got {numTargets}")
     
-    # Should automatically be updated by now
-    # 1 = baseline feedback instructions
-    # 2 = experiment paradigm understanding instructions
-    # 3 = after effect no feedback instructions
-    # 4 = attention check press 'a'
-    # 5 = attention check press 'e'
-    # 6 = demo instructions
-    betweenBlocks[str(base_no_fb - 1)] = 1
-    betweenBlocks[str(demo - 1)] = 2
-    betweenBlocks[str(rotate - 1)] = 3
-    # Attention check blocks // 5 = press 'a', 4 == press 'e', randomly pick spots before 50 trials, double check with index.js for consistency.
-    if (totalNumTrials > 39):
-        betweenBlocks[str(6)] = 4
-        betweenBlocks[str(14)] = 5
-        betweenBlocks[str(24)] = 4
-        betweenBlocks[str(39)] = 5
+    # Fixed target angles
+    targetAngles = [45, 135, 225, 315]
+    
+    # Ensure we have the correct number of rotation conditions
+    if len(rotationConditions) != 3:
+        raise ValueError(f"Expected 3 rotation conditions, got {len(rotationConditions)}")
+    
+    # Calculate number of triplets
+    numTriplets = numTrials // 3
+    
+    # Initialize trial data
+    trials = []
+    
+    # Generate trials in triplets
+    for triplet_idx in range(numTriplets):
+        # Randomly select rotation condition for middle trial
+        rotation = random.choice(rotationConditions)
+        
+        # Randomly select target angle
+        target_angle = random.choice(targetAngles)
+        
+        # First trial (flanker) - movement trial with no rotation
+        trials.append({
+            "triplet_id": triplet_idx,
+            "trial_position": 1,
+            "triplet_type": "movement",
+            "rotation_condition": 0,
+            "target_angle": target_angle
+        })
+        
+        # Second trial (middle) - either movement or no-movement
+        trial_type = random.choice(["movement", "no-movement"])
+        trials.append({
+            "triplet_id": triplet_idx,
+            "trial_position": 2,
+            "triplet_type": trial_type,
+            "rotation_condition": rotation,
+            "target_angle": target_angle
+        })
+        
+        # Third trial (flanker) - movement trial with no rotation
+        trials.append({
+            "triplet_id": triplet_idx,
+            "trial_position": 3,
+            "triplet_type": "movement",
+            "rotation_condition": 0,
+            "target_angle": target_angle
+        })
+    
+    # Convert to JSON
+    jsonData = {
+        "trials": trials,
+        "numtrials": numTrials,
+        "target_distance": 250,  # Fixed target distance
+        "rotation_conditions": rotationConditions
+    }
+    
+    return jsonData
 
+if __name__ == "__main__":
+    # Generate test file with 12 trials (4 triplets)
+    numTrials = 12
+    rotationConditions = [0, 15, -15]
+    
+    # Generate JSON
+    jsonData = generateJSON(4, numTrials, rotationConditions)
+    
+    # Save to file
+    with open('testShort.json', 'w') as f:
+        json.dump(jsonData, f, indent=4)
+    
+    print(f"Generated test file with {numTrials} trials")
+    
 
-    jsonData["trialnum"] = trialNums
-    jsonData["aiming_landmarks"] = aimingLandmarks
-    jsonData["online_fb"] = onlineFB
-    jsonData["endpoint_feedback"] = endpointFB
-    jsonData["rotation"] = rotation
-    jsonData["clamped_fb"] = clampedFB
-    jsonData["tgt_angle"] = anglesDict
-    jsonData["tgt_distance"] = tgtDistance
-    jsonData["between_blocks"] = betweenBlocks
-    jsonData["target_jump"] = targetJump
- 
-    for key in jsonData.keys():
-        print ("key: ", key)
-        print ("value: ", jsonData[key])
-        print ("")
-
-    with open('testShort.json', 'w') as outfile:
-        json.dump(jsonData, outfile)
-
-
-nonDemoCycles = [2, 2, 2, 2]
-generateJSON(2, 8, nonDemoCycles, -10, 80, 2, 270) 
-"""
-The above call 'generateJSON(2, 8, nonDemoCycles, -10, 80, 2, 270)' will generate a target file with:
-- 2 targets
-- 8 cycles (8 x 2 = 16 reaches) distributed into cycles of 2 (split by nonDemoCycles)
-- -10 rotation angle (10 degrees clockwise)
-- TargetDistance is not obsolete
-- 2 demo trials at 270 degrees (straight down)
-"""
 
