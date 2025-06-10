@@ -136,27 +136,37 @@ function checkInfo() {
     var code = values[6].value;
     subject.ethnicity = values[7].value;
     subject.race = values[8].value;
+    
+    // Only check for code if noSave is false
+    if (!noSave && actualCode.localeCompare(code) != 0) {
+        alert("Make sure to find the code from the last page before proceeding!");
+        return;
+    }
+    
+    // Check if all required fields are filled
+    if (!subject.id || !subject.age || !subject.sex || !subject.handedness || !subject.mousetype) {
+        alert("Please fill out your basic information!");
+        return;
+    }
+    
+    // If noSave is true, skip database operations
     if (noSave) {
         show('container-exp', 'container-info');
         openFullScreen();
         startGame();
         return;
     }
-    console.log(subject.id);
-    console.log(subject.handedness);
-    console.log(values)
-    if (!subject.id || !subject.age || !subject.sex || !subject.handedness || !subject.mousetype) {
-        alert("Please fill out your basic information!");
-        return;
-    } else if (actualCode.localeCompare(code) != 0) {
-        alert("Make sure to find the code from the last page before proceeding!")
-        return;
-    } else {
-        show('container-exp', 'container-info');
-        createSubject(subjectcollection, subject);
-        openFullScreen();
-        startGame();
-    }
+    
+    // Otherwise, proceed with database operations
+    show('container-exp', 'container-info');
+    createSubject(subjectcollection, subject);
+    openFullScreen();
+    startGame();
+}
+
+// Function to handle consent page
+function handleConsent() {
+    show('container-instructions1', 'container-consent');
 }
 
 // Function used to create/update subject data in the database
