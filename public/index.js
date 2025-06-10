@@ -251,39 +251,15 @@ var FEEDBACK;
 var BETWEEN_BLOCKS;
 var game_phase = BETWEEN_BLOCKS;
 var reach_feedback;
-var bb_counter = 0;
-var target_invisible = false;
-var cursor_show = true;
-var bb_mess = 0;  // Initial message state
+var bb_counter;
+var target_invisible;
+var cursor_show;
 
 // Add keyboard event listener
 function initKeyboard() {
     document.addEventListener('keydown', advance_block);
 }
 
-// Initialize the game state
-function initGameState() {
-    game_phase = BETWEEN_BLOCKS;
-    bb_mess = 0;  // Start with initial message
-    bb_counter = 0;
-    target_invisible = false;
-    cursor_show = true;
-    reach_feedback = false;
-    
-    // Show initial message
-    d3.select('#message-line-1').attr('display', 'block');
-    d3.select('#message-line-2').attr('display', 'block');
-    d3.select('#message-line-3').attr('display', 'block');
-    d3.select('#message-line-4').attr('display', 'block');
-    d3.select('#too_slow_message').attr('display', 'none');
-    d3.select('#trialcount').attr('display', 'none');
-    d3.select('#start').attr('display', 'none');
-    d3.select('#target').attr('display', 'none');
-    d3.select('#cursor').attr('display', 'none');
-}
-
-// Initialize game state after loading target file
-initGameState();
 // Initialize keyboard listener
 initKeyboard();
 
@@ -612,19 +588,29 @@ function gameSetup(data) {
 
     // Function to move cursor to random location near center
     function moveCursor() {
-        var off_x = Math.random() * start_radius + start_radius;
-        var off_y = Math.random() * start_radius + start_radius;
-        var flip_x = Math.floor(Math.random() * 2);
-        var flip_y = Math.floor(Math.random() * 2);
-        if (flip_x) {
-            hand_x = start_x - off_x;
-        } else {
-            hand_x = start_x + off_y;
-        }
-        if (flip_y) {
-            hand_y = start_y - off_y;
-        } else {
-            hand_y = start_y + off_y;
+        // Move cursor to random location near center
+        const centerX = screen_width / 2;
+        const centerY = screen_height / 2;
+        const maxOffset = 50;
+        
+        hand_x = centerX + Math.random() * maxOffset - maxOffset/2;
+        hand_y = centerY + Math.random() * maxOffset - maxOffset/2;
+        
+        // Update cursor position
+        update_cursor({
+            clientX: hand_x,
+            clientY: hand_y
+        });
+        
+        // Ensure cursor is visible and animated
+        d3.select('#cursor')
+            .attr('display', 'block')
+            .attr('fill', 'white')
+            .attr('r', 5)  // Small dot size
+            .transition()
+            .duration(200)
+            .attr('cx', hand_x)
+            .attr('cy', hand_y);
         }
     }
 
@@ -633,12 +619,27 @@ function gameSetup(data) {
     console.log("Initial X: " + hand_x + " Initial Y: " + hand_y);
     // Drawing the displayed cursor 
     svgContainer.append('circle')
-        .attr('cx', hand_x)
-        .attr('cy', hand_y)
+        .attr('cx', screen_width / 2)
+        .attr('cy', screen_height / 2)
         .attr('r', cursor_radius)
         .attr('fill', cursor_color)
         .attr('id', 'cursor')
-        .attr('display', 'none');
+        .attr('display', 'block');
+    
+    // Initialize cursor position
+    hand_x = screen_width / 2;
+    hand_y = screen_height / 2;
+    update_cursor({
+        clientX: hand_x,
+        clientY: hand_y
+    });
+    
+    // Ensure cursor is visible and animated
+    d3.select('#cursor')
+        .transition()
+        .duration(200)
+        .attr('cx', hand_x)
+        .attr('cy', hand_y);
 
     // The between block messages that will be displayed
     // **TODO** Update messages depending on your experiment
