@@ -914,8 +914,8 @@ function gameSetup(data) {
     bb_mess = between_blocks[0];
 
     // Flags to determine whether we are showing the target and cursor (not mouse)
-    target_invisible = true; // for clicking to see target
-    cursor_show = false;
+    target_invisible = false;
+    cursor_show = true;
 
     if (trial == 0) {
         moveCursor();
@@ -1116,10 +1116,11 @@ function gameSetup(data) {
         // Start of timer for search time
         begin = new Date();
 
-        // Start circle becomes visible, target, cursor invisible
+        // Start circle becomes visible
         d3.select('#start').attr('display', 'block').attr('fill', 'none');
         d3.select('#target').attr('display', 'none').attr('fill', 'blue');
-        d3.select('#cursor').attr('display', 'none');
+        // Keep cursor visible
+        d3.select('#cursor').attr('display', 'block').attr('fill', 'white');
         d3.select('#message-line-1').attr('display', 'none');
         d3.select('#message-line-2').attr('display', 'none');
         d3.select('#message-line-3').attr('display', 'none');
@@ -1173,6 +1174,13 @@ function gameSetup(data) {
 
         // Start of timer for movement time
         begin = new Date();
+
+        // Hide cursor for first and third trials
+        const t = trialList[trial];
+        const isMiddleTrial = (trial % 3) === 1;
+        if (!isMiddleTrial) {
+            d3.select('#cursor').attr('display', 'none');
+        }
 
         // Start circle disappears
         //d3.select('#start').attr('display', 'block');
