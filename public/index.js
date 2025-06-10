@@ -164,10 +164,6 @@ function checkInfo() {
     startGame();
 }
 
-// Function to handle consent page
-function handleConsent() {
-    show('container-instructions1', 'container-consent');
-}
 
 // Function used to create/update subject data in the database
 function createSubject(collection, subject) {
