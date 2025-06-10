@@ -618,7 +618,7 @@ function gameSetup(data) {
             .attr('cx', hand_x)
             .attr('cy', hand_y);
         }
-    }
+    
 
 
 
