@@ -251,6 +251,43 @@ var FEEDBACK;
 var BETWEEN_BLOCKS;
 var game_phase = BETWEEN_BLOCKS;
 var reach_feedback;
+var bb_counter = 0;
+var target_invisible = false;
+var cursor_show = true;
+var bb_mess = 0;  // Initial message state
+
+// Add keyboard event listener
+function initKeyboard() {
+    document.addEventListener('keydown', advance_block);
+}
+
+// Initialize the game state
+function initGameState() {
+    game_phase = BETWEEN_BLOCKS;
+    bb_mess = 0;  // Start with initial message
+    bb_counter = 0;
+    target_invisible = false;
+    cursor_show = true;
+    reach_feedback = false;
+    
+    // Show initial message
+    d3.select('#message-line-1').attr('display', 'block');
+    d3.select('#message-line-2').attr('display', 'block');
+    d3.select('#message-line-3').attr('display', 'block');
+    d3.select('#message-line-4').attr('display', 'block');
+    d3.select('#too_slow_message').attr('display', 'none');
+    d3.select('#trialcount').attr('display', 'none');
+    d3.select('#start').attr('display', 'none');
+    d3.select('#target').attr('display', 'none');
+    d3.select('#cursor').attr('display', 'none');
+}
+
+// Initialize game state after loading target file
+initGameState();
+// Initialize keyboard listener
+initKeyboard();
+
+var reach_feedback;
 var bb_counter;
 var target_invisible;
 var cursor_show;
@@ -1428,6 +1465,11 @@ function startGame() {
     fileName = "tgt_files/testShort.json";
     subject.tgt_file = fileName;
     subjTrials.group_type = "null"; // **TODO** update group_type to manage the groups
+    
+    // Initialize game state before loading target file
+    initGameState();
+    
+    // Load target file
     $.getJSON(fileName, function(json) {
         target_file_data = json;
         gameSetup(target_file_data);
