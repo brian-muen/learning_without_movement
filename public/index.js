@@ -1420,7 +1420,7 @@ window.fullTrialLog.push({
 
         }
     }
-}
+
 
 // Function used to start running the game
 // **TODO** Update the 'fileName' to path to targetfile
