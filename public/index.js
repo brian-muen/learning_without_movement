@@ -136,34 +136,28 @@ function checkInfo() {
     var code = values[6].value;
     subject.ethnicity = values[7].value;
     subject.race = values[8].value;
-    
-    // Only check for code if noSave is false
-    if (!noSave && actualCode.localeCompare(code) != 0) {
-        alert("Make sure to find the code from the last page before proceeding!");
-        return;
-    }
-    
-    // Check if all required fields are filled
-    if (!subject.id || !subject.age || !subject.sex || !subject.handedness || !subject.mousetype) {
-        alert("Please fill out your basic information!");
-        return;
-    }
-    
-    // If noSave is true, skip database operations
     if (noSave) {
         show('container-exp', 'container-info');
         openFullScreen();
         startGame();
         return;
     }
-    
-    // Otherwise, proceed with database operations
-    show('container-exp', 'container-info');
-    createSubject(subjectcollection, subject);
-    openFullScreen();
-    startGame();
+    console.log(subject.id);
+    console.log(subject.handedness);
+    console.log(values)
+    if (!subject.id || !subject.age || !subject.sex || !subject.handedness || !subject.mousetype) {
+        alert("Please fill out your basic information!");
+        return;
+    } else if (actualCode.localeCompare(code) != 0) {
+        alert("Make sure to find the code from the last page before proceeding!")
+        return;
+    } else {
+        show('container-exp', 'container-info');
+        createSubject(subjectcollection, subject);
+        openFullScreen();
+        startGame();
+    }
 }
-
 
 // Function used to create/update subject data in the database
 function createSubject(collection, subject) {
@@ -261,248 +255,13 @@ var bb_counter;
 var target_invisible;
 var cursor_show;
 
-// Add keyboard event listener
-function initKeyboard() {
-    document.addEventListener('keydown', advance_block);
-}
-
-// Initialize keyboard listener
-initKeyboard();
-
-var reach_feedback;
-var bb_counter;
-var target_invisible;
-var cursor_show;
-
 // Variables to track screen size
 var prev_height;
 var prev_width;
 
 // Function that sets up the game 
 // All game functions are defined within this main function, treat as "main"
-// === Running Median RT/MT Buffer (length 5) for planning-only trial timing ===
-const rtBuffer = [];
-const mtBuffer = [];
-const RT_BUFFER_LENGTH = 5;
-
-function pushToBuffer(value, buffer) {
-    buffer.push(value);
-    if (buffer.length > RT_BUFFER_LENGTH) buffer.shift();
-}
-function getMedian(buffer) {
-    if (buffer.length === 0) return 0;
-    const sorted = [...buffer].sort((a, b) => a - b);
-    const mid = Math.floor(sorted.length / 2);
-    if (sorted.length % 2 === 0) {
-        return (sorted[mid - 1] + sorted[mid]) / 2;
-    } else {
-        return sorted[mid];
-    }
-}
-
-// Initialize experiment with target file data
 function gameSetup(data) {
-    // Initialize experiment state
-    const experimentState = {
-        currentTriplet: 0,
-        currentTrial: 0,
-        rtBuffer: [],
-        mtBuffer: [],
-        trialHistory: [],
-        isPlanningMode: false,
-        trials: data.trials,
-        targetDistance: data.target_distance,
-        rotationConditions: data.rotation_conditions,
-        numTrials: data.numtrials
-    };
-
-    // Initialize trial index
-    let currentTrialIndex = 0;
-
-    // Function to get next trial data
-    function getNextTrialData() {
-        if (currentTrialIndex >= experimentState.numTrials) {
-            return null;
-        }
-        
-        const trialData = experimentState.trials[currentTrialIndex];
-        currentTrialIndex++;
-        return trialData;
-    }
-
-    // Function to get current trial data
-    function getCurrentTrialData() {
-        return experimentState.trials[currentTrialIndex - 1];
-    }
-
-    // Calculate running median
-    function getMedian(buffer) {
-        const sorted = [...buffer].sort((a, b) => a - b);
-        const mid = Math.floor(sorted.length / 2);
-        return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-    }
-
-    // Calculate STL
-    function calculateSTL(trialData) {
-        if (trialData.length < 3) return null;
-        const triplet = trialData.slice(-3);
-        return triplet[2].endpointAngle - triplet[0].endpointAngle;
-    }
-
-    // Calculate Remembered STL
-    function calculateRememberedSTL(trialData) {
-        if (trialData.length < 4) return null;
-        const currentTriplet = trialData.slice(-3);
-        const previousTriplet = trialData.slice(-6, -3);
-        return currentTriplet[0].endpointAngle - previousTriplet[0].endpointAngle;
-    }
-
-    // Handle planning-only condition
-    function handlePlanningCondition() {
-        experimentState.isPlanningMode = true;
-        const latency = getMedian(experimentState.rtBuffer) || 500;
-        const duration = getMedian(experimentState.mtBuffer) || 800;
-        
-        // Show target in magenta after latency
-        setTimeout(() => {
-            d3.select('#target').style('fill', 'magenta');
-            
-            // Start animation after latency
-            setTimeout(() => {
-                animateCursor();
-            }, latency);
-        }, 100); // 100ms delay after green
-    }
-
-    // Animate cursor for planning condition
-    function animateCursor() {
-        const targetAngle = experimentState.currentTrialData.targetAngle;
-        const rotation = experimentState.currentTrialData.rotation;
-        
-        // Calculate animation path
-        const path = d3.path();
-        path.moveTo(centerX, centerY);
-        const targetX = centerX + TARGET_RADIUS * Math.cos(degToRad(targetAngle + rotation));
-        const targetY = centerY + TARGET_RADIUS * Math.sin(degToRad(targetAngle + rotation));
-        path.lineTo(targetX, targetY);
-        
-        // Create animation
-        d3.select('#cursor')
-            .transition()
-            .duration(getMedian(experimentState.mtBuffer) || 800)
-            .attr('d', path.toString())
-            .on('end', () => {
-                // Show endpoint feedback
-                showFeedback(targetX, targetY);
-                experimentState.isPlanningMode = false;
-            });
-    }
-
-    // Show feedback
-    function showFeedback(x, y) {
-        const angle = calculateAngle(x, y);
-        const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
-        
-        // Draw feedback circle
-        d3.select('#target')
-            .transition()
-            .duration(500)
-            .style('fill', 'red');
-        
-        // Save trial data
-        saveTrialData({
-            trialIndex: experimentState.currentTrial,
-            tripletIndex: experimentState.currentTrial % 3 + 1,
-            tripletId: experimentState.currentTriplet,
-            tripletType: experimentState.currentTrial % 3 === 1 ? 'no-movement' : 'movement',
-            targetAngle: experimentState.currentTrialData.targetAngle,
-            rotation: experimentState.currentTrialData.rotation,
-            feedbackShown: true,
-            reactionTime: Date.now() - experimentState.startTime,
-            movementDuration: Date.now() - experimentState.movementStart,
-            endpointAngle: angle,
-            timeoutReason: null
-        });
-    }
-
-    // Save trial data
-    function saveTrialData(trialData) {
-        experimentState.trialHistory.push(trialData);
-        experimentState.trialHistory = experimentState.trialHistory.slice(-5); // Keep last 5 trials
-        
-        // Calculate STL and Remembered STL
-        const stl = calculateSTL(experimentState.trialHistory);
-        const rememberedStl = calculateRememberedSTL(experimentState.trialHistory);
-        
-        // Update buffers
-        if (!experimentState.isPlanningMode) {
-            pushToBuffer(trialData.reactionTime, experimentState.rtBuffer);
-            pushToBuffer(trialData.movementDuration, experimentState.mtBuffer);
-        }
-    }
-
-    // Handle timeout
-    function handleTimeout(reason) {
-        d3.select('#target')
-            .transition()
-            .duration(500)
-            .style('fill', 'red');
-        
-        saveTrialData({
-            ...experimentState.currentTrialData,
-            timeoutReason: reason
-        });
-        
-        // Show timeout message
-        d3.select('#too_slow_message')
-            .style('display', 'block')
-            .text(reason);
-        
-        // Wait and restart trial
-        setTimeout(() => {
-            d3.select('#too_slow_message').style('display', 'none');
-            startNextTrial();
-        }, TIMEOUT_DURATION);
-    }
-
-    // Start next trial
-    function startNextTrial() {
-        const trialData = getNextTrialData();
-        if (!trialData) {
-            // No more trials - end the experiment
-            endGame();
-            return;
-        }
-
-        experimentState.currentTrialData = trialData;
-        
-        // Update triplet state
-        if (trialData.trial_position === 1) {
-            experimentState.currentTriplet++;
-        }
-        
-        // Reset trial state
-        experimentState.startTime = Date.now();
-        experimentState.movementStart = null;
-        experimentState.isPlanningMode = false;
-        
-        // Show target
-        showTarget(trialData.target_angle);
-        
-        // Handle planning condition
-        if (trialData.triplet_type === 'no-movement') {
-            handlePlanningCondition();
-        }
-    }
-
-    // Initialize experiment
-    const centerX = width / 2;
-    const centerY = height / 2;
-    const TARGET_RADIUS = 250;
-    
-    // Start first trial
-    startNextTrial();
-}
     /*********************
      * Browser Settings  *
      *********************/
@@ -594,58 +353,33 @@ function gameSetup(data) {
 
     // Function to move cursor to random location near center
     function moveCursor() {
-        // Move cursor to random location near center
-        const centerX = screen_width / 2;
-        const centerY = screen_height / 2;
-        const maxOffset = 50;
-        
-        hand_x = centerX + Math.random() * maxOffset - maxOffset/2;
-        hand_y = centerY + Math.random() * maxOffset - maxOffset/2;
-        
-        // Update cursor position
-        update_cursor({
-            clientX: hand_x,
-            clientY: hand_y
-        });
-        
-        // Ensure cursor is visible and animated
-        d3.select('#cursor')
-            .attr('display', 'block')
-            .attr('fill', 'white')
-            .attr('r', 5)  // Small dot size
-            .transition()
-            .duration(200)
-            .attr('cx', hand_x)
-            .attr('cy', hand_y);
+        var off_x = Math.random() * start_radius + start_radius;
+        var off_y = Math.random() * start_radius + start_radius;
+        var flip_x = Math.floor(Math.random() * 2);
+        var flip_y = Math.floor(Math.random() * 2);
+        if (flip_x) {
+            hand_x = start_x - off_x;
+        } else {
+            hand_x = start_x + off_y;
         }
-    
+        if (flip_y) {
+            hand_y = start_y - off_y;
+        } else {
+            hand_y = start_y + off_y;
+        }
+    }
 
 
 
     console.log("Initial X: " + hand_x + " Initial Y: " + hand_y);
     // Drawing the displayed cursor 
     svgContainer.append('circle')
-        .attr('cx', screen_width / 2)
-        .attr('cy', screen_height / 2)
+        .attr('cx', hand_x)
+        .attr('cy', hand_y)
         .attr('r', cursor_radius)
         .attr('fill', cursor_color)
         .attr('id', 'cursor')
-        .attr('display', 'block');
-    
-    // Initialize cursor position
-    hand_x = screen_width / 2;
-    hand_y = screen_height / 2;
-    update_cursor({
-        clientX: hand_x,
-        clientY: hand_y
-    });
-    
-    // Ensure cursor is visible and animated
-    d3.select('#cursor')
-        .transition()
-        .duration(200)
-        .attr('cx', hand_x)
-        .attr('cy', hand_y);
+        .attr('display', 'none');
 
     // The between block messages that will be displayed
     // **TODO** Update messages depending on your experiment
@@ -815,64 +549,15 @@ function gameSetup(data) {
      *****************/
 
     // Reading the json target file into the game
-    // ==================
-    // Phase 1: Consistent Trial Structure (Per-trial Object/Array)
-    // ==================
-    // Accepts both modern target files (array of objects with all fields) and legacy (parallel arrays).
-    // Modern preferred: [
-    //   { triplet_id, trial_position, triplet_type, rotation, target_angle, feedback_type, ... }
-    // ]
-    // Legacy: arrays per field (need to transform)
-    if (Array.isArray(data.trials)) {
-        // Modern: Already in desired array-of-objects format
-        window.trialList = data.trials;
-        num_trials = trialList.length;
-    } else {
-        // Legacy: Build per-trial array of objects from parallel arrays
-        trialList = [];
-        num_trials = data.numtrials;
-        for (let i = 0; i < num_trials; i++) {
-            trialList.push({
-                trial_index: i + 1,
-                // Optional fallback for old files—otherwise supply as null
-                triplet_id: data.triplet_id ? data.triplet_id[i] : null,
-                triplet_position: data.trial_position ? data.trial_position[i] : ((i % 3) + 1),
-                triplet_type: data.triplet_type ? data.triplet_type[i] : null,
-                rotation: data.rotation ? data.rotation[i] : 0,
-                target_angle: data.tgt_angle ? data.tgt_angle[i] : 0,
-                feedback_type: data.feedback_type ? data.feedback_type[i] : (
-                    (data.endpoint_feedback && data.endpoint_feedback[i]) ? 'endpoint' :
-                    (data.online_fb && data.online_fb[i]) ? 'online' :
-                    (data.clamped_fb && data.clamped_fb[i]) ? 'clamp' : 'none'
-                ),
-                // Preserve originals (for future fields)
-                endpoint_feedback: data.endpoint_feedback ? data.endpoint_feedback[i] : false,
-                online_fb: data.online_fb ? data.online_fb[i] : false,
-                clamped_fb: data.clamped_fb ? data.clamped_fb[i] : false,
-                between_blocks: data.between_blocks ? data.between_blocks[i] : null,
-                target_jump: data.target_jump ? data.target_jump[i] : 0,
-                // For planning-only condition logic
-                is_planning_only: data.is_planning_only ? data.is_planning_only[i] : false
-            });
-        }
-        window.trialList = trialList;
-    }
-
-    // Replace all global trial variables with pointers to trialList fields for future code
-    // (Legacy arrays can be left for completeness, but future code should use trialList[trial])
-    target_file_data = data; // For legacy compatibility
-    rotation = trialList.map(t => t.rotation);
-    target_angle = trialList.map(t => t.target_angle);
-    online_fb = trialList.map(t => t.online_fb);
-    endpt_fb = trialList.map(t => t.endpoint_feedback);
-    clamped_fb = trialList.map(t => t.clamped_fb);
-    between_blocks = trialList.map(t => t.between_blocks);
-    target_jump = trialList.map(t => t.target_jump);
-    // num_trials is already set above
-
-    // ==================
-    // END: Unified trial structure for downstream logic!
-    // ==================
+    target_file_data = data;
+    rotation = target_file_data.rotation; // degrees
+    target_angle = target_file_data.tgt_angle; //degrees
+    online_fb = target_file_data.online_fb;
+    endpt_fb = target_file_data.endpoint_feedback;
+    clamped_fb = target_file_data.clamped_fb;
+    between_blocks = target_file_data.between_blocks;
+    target_jump = target_file_data.target_jump;
+    num_trials = target_file_data.numtrials;
 
     // Initializing trial count
     trial = 0;
@@ -920,8 +605,8 @@ function gameSetup(data) {
     bb_mess = between_blocks[0];
 
     // Flags to determine whether we are showing the target and cursor (not mouse)
-    target_invisible = false;
-    cursor_show = true;
+    target_invisible = true; // for clicking to see target
+    cursor_show = false;
 
     if (trial == 0) {
         moveCursor();
@@ -962,31 +647,29 @@ function gameSetup(data) {
 
         // Calculations done in the MOVING phase
         if (game_phase == MOVING) {
-            // Use per-trial object structure
-            const t = trialList[trial];
-            console.log(t.target_jump); // Debugging message to check if there was supposed to be a target jump
+            console.log(target_jump[trial]); // Debugging message to check if there was supposed to be a target jump
             /*
-              Jump target to clamp if target_jump == 1
-              Jump target away from clamp by target_jump if value is neither 0 || 1
+              Jump target to clamp if target_jump[trial] == 1
+              Jump target away from clamp by target_jump[trial] if value is neither 0 || 1
             */
-            if (t.target_jump == 1) {
-                target_x = start_x + target_dist * Math.cos((t.target_angle + t.rotation) * Math.PI / 180);
-                target_y = start_y - target_dist * Math.sin((t.target_angle + t.rotation) * Math.PI / 180);
+            if (target_jump[trial] == 1) {
+                target_x = start_x + target_dist * Math.cos((target_angle[trial] + rotation[trial]) * Math.PI / 180);
+                target_y = start_y - target_dist * Math.sin((target_angle[trial] + rotation[trial]) * Math.PI / 180);
                 d3.select('#target').attr('cx', target_x).attr('cy', target_y).attr('display', 'block');
-            } else if (t.target_jump != 0) {
-                target_x = start_x + target_dist * Math.cos((t.target_angle + t.target_jump) * Math.PI / 180);
-                target_y = start_y - target_dist * Math.sin((t.target_angle + t.target_jump) * Math.PI / 180);
+            } else if (target_jump[trial] != 0) {
+                target_x = start_x + target_dist * Math.cos((target_angle[trial] + target_jump[trial]) * Math.PI / 180);
+                target_y = start_y - target_dist * Math.sin((target_angle[trial] + target_jump[trial]) * Math.PI / 180);
                 d3.select('#target').attr('cx', target_x).attr('cy', target_y).attr('display', 'block');
             }
 
             // Updating cursor locations depending on clamp, fb, no_fb
-            if (t.clamped_fb) { // Clamped feedback
-                cursor_x = start_x + r * Math.cos((t.target_angle + t.rotation) * Math.PI / 180);
-                cursor_y = start_y - r * Math.sin((t.target_angle + t.rotation) * Math.PI / 180);
-            } else if (t.online_fb) { // Rotated feedback (vmr)
-                cursor_x = start_x + r * Math.cos((hand_angle + t.rotation) * Math.PI / 180);
-                cursor_y = start_y - r * Math.sin((hand_angle + t.rotation) * Math.PI / 180);
-            } else { // Veridical feedback
+            if (clamped_fb[trial]) { // Clamped feedback
+                cursor_x = start_x + r * Math.cos((target_angle[trial] + rotation[trial]) * Math.PI / 180);
+                cursor_y = start_y - r * Math.sin((target_angle[trial] + rotation[trial]) * Math.PI / 180);
+            } else if (online_fb[trial]) { // Rotated feedback (vmr)
+                cursor_x = start_x + r * Math.cos((hand_angle + rotation[trial]) * Math.PI / 180);
+                cursor_y = start_y - r * Math.sin((hand_angle + rotation[trial]) * Math.PI / 180);
+            } else { // Veritical feedback
                 cursor_x = hand_x;
                 cursor_y = hand_y;
             }
@@ -1037,9 +720,7 @@ function gameSetup(data) {
             }
             // Displaying the cursor during MOVING if targetfile indicates so for the reach
         } else if (game_phase == MOVING) {
-            // Use per-trial object structure here
-            const t = trialList[trial];
-            if (t.online_fb || t.clamped_fb) {
+            if (online_fb[trial] || clamped_fb[trial]) {
                 d3.select('#cursor').attr('cx', cursor_x).attr('cy', cursor_y).attr('display', 'block');
             } else {
                 d3.select('#cursor').attr('display', 'none'); // hide the cursor
@@ -1122,11 +803,10 @@ function gameSetup(data) {
         // Start of timer for search time
         begin = new Date();
 
-        // Start circle becomes visible
+        // Start circle becomes visible, target, cursor invisible
         d3.select('#start').attr('display', 'block').attr('fill', 'none');
         d3.select('#target').attr('display', 'none').attr('fill', 'blue');
-        // Keep cursor visible
-        d3.select('#cursor').attr('display', 'block').attr('fill', 'white');
+        d3.select('#cursor').attr('display', 'none');
         d3.select('#message-line-1').attr('display', 'none');
         d3.select('#message-line-2').attr('display', 'none');
         d3.select('#message-line-3').attr('display', 'none');
@@ -1147,7 +827,6 @@ function gameSetup(data) {
 
     // Phase when users have held cursor in start circle long enough so target shows up 
     function show_targets() {
-        const t = trialList[trial];
         game_phase = SHOW_TARGETS;
 
         // Record search time as the time elapsed from the start of the search phase to the start of this phase
@@ -1157,16 +836,9 @@ function gameSetup(data) {
         // Start of timer for reaction time
         begin = new Date();
 
-        // Planning-only condition
-        if (t.triplet_type === "no-movement" || t.is_planning_only) {
-            startPlanningOnlyTrial();
-            target_invisible = false;
-            return;
-        }
-
-        // Otherwise: Movement trial logic as before
-        target_x = start_x + target_dist * Math.cos(t.target_angle * Math.PI / 180);
-        target_y = start_y - target_dist * Math.sin(t.target_angle * Math.PI / 180);
+        // Target becomes visible
+        target_x = start_x + target_dist * Math.cos(target_angle[trial] * Math.PI / 180);
+        target_y = start_y - target_dist * Math.sin(target_angle[trial] * Math.PI / 180);
         d3.select('#target').attr('display', 'block').attr('cx', target_x).attr('cy', target_y);
         target_invisible = false;
     }
@@ -1181,148 +853,9 @@ function gameSetup(data) {
         // Start of timer for movement time
         begin = new Date();
 
-        // Hide cursor for first and third trials
-        const t = trialList[trial];
-        const isMiddleTrial = (trial % 3) === 1;
-        if (!isMiddleTrial) {
-            d3.select('#cursor').attr('display', 'none');
-        }
-
         // Start circle disappears
         //d3.select('#start').attr('display', 'block');
         d3.select('#start').attr('fill', 'none');
-// === Planning-only (No-Movement) Trial Handler ===
-// Call this from show_targets() or moving_phase() for planning-only triplet middles.
-
-function startPlanningOnlyTrial() {
-    const t = trialList[trial];
-    // 1. Green target for 100ms, then magenta
-    target_x = start_x + target_dist * Math.cos(t.target_angle * Math.PI / 180);
-    target_y = start_y - target_dist * Math.sin(t.target_angle * Math.PI / 180);
-
-    d3.select('#target')
-      .attr('display', 'block')
-      .attr('cx', target_x)
-      .attr('cy', target_y)
-      .attr('fill', 'green');
-
-    setTimeout(() => {
-        d3.select('#target').attr('fill', 'magenta');
-
-        // 2. Animate the cursor along planned (rotated) path
-        const latency = getMedian(rtBuffer); // ms
-        const duration = getMedian(mtBuffer); // ms
-        // If less than 5 trials, use as many as are available
-
-        // Calculate path points
-        const start_ang = t.target_angle * Math.PI / 180;
-        const end_ang = (t.target_angle + t.rotation) * Math.PI / 180;
-        const numAnimSteps = Math.ceil(Math.max(10, duration / 16));
-        const delay = Math.max(0, latency);
-
-        // Ensure cursor at center at onset
-        d3.select('#cursor')
-          .attr('display', 'block')
-          .attr('cx', start_x)
-          .attr('cy', start_y);
-
-        // Record RT as soon as magenta turns on (since no actual movement from subject)
-        rt = delay;
-
-        setTimeout(() => {
-            let step = 0;
-            function animateCursor() {
-                if (step > numAnimSteps) {
-                    // Animation complete, feedback phase (end of trial)
-                    d3.select('#cursor').attr('cx', start_x + target_dist * Math.cos(end_ang)).attr('cy', start_y - target_dist * Math.sin(end_ang));
-                    setTimeout(() => {
-                        fb_phase(); // May need a planning-only feedback stub
-                    }, 250);
-                    return;
-                }
-
-                // Interpolate trajectory (can be straight or allow a curve)
-                const theta = start_ang + (end_ang - start_ang) * (step / numAnimSteps);
-                const radius = target_dist * (step / numAnimSteps);
-
-                d3.select('#cursor')
-                  .attr('cx', start_x + radius * Math.cos(theta))
-                  .attr('cy', start_y - radius * Math.sin(theta));
-
-                step++;
-                requestAnimationFrame(animateCursor);
-            }
-            animateCursor();
-        }, delay);
-
-        // Movement duration is duration for animation
-        mt = duration;
-
-        // Timeout checks: if hand moves > 4px from center during animation window, or if latency >800ms or duration >400ms
-        // (Attach a mousemove listener during this window)
-        let planningTimeout = false;
-
-        function checkPlanningMovement(e) {
-            const dx = hand_x - start_x;
-            const dy = hand_y - start_y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist > 4) {
-                planningTimeout = true;
-                document.removeEventListener('mousemove', checkPlanningMovement, false);
-                showTimeoutOverlay("Stay still during planning trials!");
-                reach_feedback = "planning_timeout";
-                // Log and skip to next trial after short timeout
-                setTimeout(() => {
-                    next_trial();
-                }, 2000);
-            }
-        }
-        document.addEventListener('mousemove', checkPlanningMovement, false);
-
-        // After animation, always remove listener
-        setTimeout(() => {
-            document.removeEventListener('mousemove', checkPlanningMovement, false);
-        }, delay + duration + 100);
-
-        // Timeout: latency >800ms (since green/magenta shown), or planned movement >400ms
-        if (latency > 800 || duration > 400) {
-            planningTimeout = true;
-            showTimeoutOverlay("Too slow to start planning or too slow animation!");
-            reach_feedback = "planning_latency_timeout";
-            setTimeout(() => {
-                next_trial();
-            }, 2000);
-        }
-    }, 100); // green target for 100ms
-}
-
-// Overlay display for timeouts/violations
-function showTimeoutOverlay(message) {
-    // Overlay element, could be a div or D3 element depending on current infra
-    let overlay = document.getElementById('timeoutOverlay');
-    if (!overlay) {
-        overlay = document.createElement('div');
-        overlay.id = 'timeoutOverlay';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100vw';
-        overlay.style.height = '100vh';
-        overlay.style.backgroundColor = 'rgba(0,0,0,0.65)';
-        overlay.style.color = 'red';
-        overlay.style.fontSize = '3em';
-        overlay.style.display = 'flex';
-        overlay.style.alignItems = 'center';
-        overlay.style.justifyContent = 'center';
-        overlay.style.zIndex = '9000';
-        document.body.appendChild(overlay);
-    }
-    overlay.innerText = message;
-    overlay.style.display = 'flex';
-    setTimeout(() => {
-        overlay.style.display = 'none';
-    }, 1800);
-}
     }
 
     // Phase where users have finished their reach and receive feedback
@@ -1383,28 +916,6 @@ function showTimeoutOverlay(message) {
 
     // Function used to initiate the next trial after uploading reach data and subject data onto the database
     // Cleans up all the variables and displays to set up for the next reach
-// =====================
-// Full per-trial behavioral log for STL/learning analysis
-if (!window.fullTrialLog) window.fullTrialLog = [];
-const currTrialObj = trialList[trial] || {};
-window.fullTrialLog.push({
-    trial_index: trial + 1,
-    triplet_index: currTrialObj.trial_position,
-    triplet_id: currTrialObj.triplet_id,
-    triplet_type: currTrialObj.triplet_type,
-    target_angle: currTrialObj.target_angle,
-    rotation_condition: currTrialObj.rotation,
-    feedback_type: currTrialObj.feedback_type,
-    feedback_shown: (reach_feedback === "good_reach" || reach_feedback === "planning_timeout" || reach_feedback === "planning_latency_timeout") ? "yes" : "no",
-    rt: rt,
-    mt: mt,
-    endpoint_angle: hand_fb_angle,
-    timeout_reason: (reach_feedback && reach_feedback.includes("timeout")) ? reach_feedback : null,
-    planning_trial: (currTrialObj.triplet_type === "no-movement" || currTrialObj.is_planning_only) ? true : false,
-    search_time: search_time,
-    timestamp: new Date().toISOString()
-});
-// =====================
     function next_trial() {
         var d = new Date();
         var current_date = (parseInt(d.getMonth()) + 1).toString() + "/" + d.getDate() + "/" + d.getFullYear() + " " + d.getHours() + ":" + d.getMinutes() + "." + d.getSeconds() + "." + d.getMilliseconds();
@@ -1472,7 +983,7 @@ window.fullTrialLog.push({
 
         }
     }
-
+}
 
 // Function used to start running the game
 // **TODO** Update the 'fileName' to path to targetfile
@@ -1480,11 +991,6 @@ function startGame() {
     fileName = "tgt_files/testShort.json";
     subject.tgt_file = fileName;
     subjTrials.group_type = "null"; // **TODO** update group_type to manage the groups
-    
-    // Initialize game state before loading target file
-    initGameState();
-    
-    // Load target file
     $.getJSON(fileName, function(json) {
         target_file_data = json;
         gameSetup(target_file_data);
