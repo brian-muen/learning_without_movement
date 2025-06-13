@@ -103,7 +103,9 @@ var subject = {
     comments: null,
     distractions: [],
     distracto: null,
-    dpi: null
+    dpi: null,
+    // addition
+    angle: null
 }
 
 // Object used to track reaching data (updated every reach and uploaded to database)
@@ -112,15 +114,16 @@ var subjTrials = {
     experimentID: null,
     trialNum: [],
     currentDate: [],
-    target_angle: [],
-    trial_type: [],
+    // target_angle: [], // **
+    // trial_type: [], // **
     rotation: [],
     hand_fb_angle: [],
     rt: [],
     mt: [],
     search_time: [],
     reach_feedback: [],
-    group_type: null
+    group_type: null,
+    // SUPPLEMENT: triplet_id, triplet_position, triplet_type, feedback_rotation, etc.
 }
 
 // Function used to check if all questions were filled in info form, if so, starts the experiment 
@@ -254,6 +257,11 @@ var reach_feedback;
 var bb_counter;
 var target_invisible;
 var cursor_show;
+// added variables
+var rt_tracker;
+var median_rt; // keep track of median RT for previous five trials
+var mt_tracker;
+var median_mt; // keep track of median MT for previous five trials
 
 // Variables to track screen size
 var prev_height;
@@ -464,7 +472,7 @@ function gameSetup(data) {
         .text('Press SPACE BAR when you are ready to proceed.');
 
     // Setting up parameters and display when reach is too slow
-    too_slow_time = 300; // in milliseconds
+    too_slow_time = 400; // in milliseconds
     svgContainer.append('text')
         .attr('text-anchor', 'middle')
         .attr('x', screen_width / 2)
@@ -491,7 +499,7 @@ function gameSetup(data) {
 
     // Parameters and display for the reach counter located at the bottom right corner
     counter = 1;
-    totalTrials = target_file_data.numtrials;
+    totalTrials = target_file_data.numtrials; 
     svgContainer.append('text')
         .attr('text-anchor', 'end')
         .attr('x', screen_width / 20 * 19)
@@ -549,15 +557,36 @@ function gameSetup(data) {
      *****************/
 
     // Reading the json target file into the game
+    // SUPPLEMENT ANY CHANGES HERE
     target_file_data = data;
-    rotation = target_file_data.rotation; // degrees
+    target_angle = target_file_data.angle;
+    /* rotation = target_file_data.rotation; // degrees
     target_angle = target_file_data.tgt_angle; //degrees
     online_fb = target_file_data.online_fb;
     endpt_fb = target_file_data.endpoint_feedback;
     clamped_fb = target_file_data.clamped_fb;
     between_blocks = target_file_data.between_blocks;
-    target_jump = target_file_data.target_jump;
+    target_jump = target_file_data.target_jump; */
+    rotation = [];
+    online_fb = [];
+    endpt_fb = [];
+    between_blocks = [];
+    trial_in_triplet = [];
     num_trials = target_file_data.numtrials;
+
+    for (let i = 0; i < num_trials; i++) {
+        rotation[i] = trialList[i].rotation;
+        between_blocks[i] = trialList[i].between_blocks ?? 0;
+        trial_in_triplet[i] = trialList[i].trial_in_triplet;
+        if (trial_in_triplet[i] === 1) {
+            online_fb[i] = 1;
+            endpt_fb[i] = 1;
+        }
+        else {
+            online_fb[i] = 0;
+            endpt_fb[i] = 0;
+        }
+    }
 
     // Initializing trial count
     trial = 0;
@@ -644,14 +673,14 @@ function gameSetup(data) {
 
         // Update hand angle
         hand_angle = Math.atan2(start_y - hand_y, hand_x - start_x) * 180 / Math.PI;
-
+        /*
         // Calculations done in the MOVING phase
         if (game_phase == MOVING) {
             console.log(target_jump[trial]); // Debugging message to check if there was supposed to be a target jump
-            /*
+            
               Jump target to clamp if target_jump[trial] == 1
               Jump target away from clamp by target_jump[trial] if value is neither 0 || 1
-            */
+            
             if (target_jump[trial] == 1) {
                 target_x = start_x + target_dist * Math.cos((target_angle[trial] + rotation[trial]) * Math.PI / 180);
                 target_y = start_y - target_dist * Math.sin((target_angle[trial] + rotation[trial]) * Math.PI / 180);
@@ -672,11 +701,11 @@ function gameSetup(data) {
             } else { // Veritical feedback
                 cursor_x = hand_x;
                 cursor_y = hand_y;
-            }
+            } 
         } else {
             cursor_x = hand_x;
             cursor_y = hand_y;
-        }
+        } */
 
         // Calculations done in the HOLDING phase
         if (game_phase == HOLDING) {
@@ -837,8 +866,8 @@ function gameSetup(data) {
         begin = new Date();
 
         // Target becomes visible
-        target_x = start_x + target_dist * Math.cos(target_angle[trial] * Math.PI / 180);
-        target_y = start_y - target_dist * Math.sin(target_angle[trial] * Math.PI / 180);
+        target_x = start_x + target_dist * Math.cos(target_angle * Math.PI / 180);
+        target_y = start_y - target_dist * Math.sin(target_angle * Math.PI / 180);
         d3.select('#target').attr('display', 'block').attr('cx', target_x).attr('cy', target_y);
         target_invisible = false;
     }
@@ -927,7 +956,7 @@ function gameSetup(data) {
         subjTrials.id = subject.id;
         subjTrials.currentDate.push(current_date);
         subjTrials.trialNum.push(trial + 1);
-        subjTrials.target_angle.push(target_angle[trial]);
+        subjTrials.target_angle.push(target_angle);
         subjTrials.trial_type.push(trial_type);
         subjTrials.rotation.push(rotation[trial]);
         subjTrials.hand_fb_angle.push(hand_fb_angle);
